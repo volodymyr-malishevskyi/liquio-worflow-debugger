@@ -1,0 +1,243 @@
+import {
+  Badge,
+  Box,
+  Button,
+  Callout,
+  Code,
+  Flex,
+  Grid,
+  ScrollArea,
+  Spinner,
+  Text,
+  TextField,
+} from "@radix-ui/themes";
+import * as monaco from "monaco-editor";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const FUNC_PLACEHOLDER = `(documents, events) => {\n\treturn documents[0].documentTemplateId;\n};`;
+
+function parseJournalUrl(value) {
+  try {
+    const url = new URL(value);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const id = segments[segments.length - 1];
+    const apiOrigin = url.origin.replace("//admin-", "//admin-api-");
+    return { id, apiOrigin };
+  } catch {
+    return null;
+  }
+}
+
+export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem("token") ?? "");
+  const [workflowId, setWorkflowId] = useState(
+    () => localStorage.getItem("workflowId") ?? "",
+  );
+  const [apiBase, setApiBase] = useState(
+    () => localStorage.getItem("apiBase") ?? "",
+  );
+  const [result, setResult] = useState("—");
+  const [isError, setIsError] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const editorContainerRef = useRef(null);
+  const editorRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem("token", token);
+  }, [token]);
+
+  useEffect(() => {
+    localStorage.setItem("workflowId", workflowId);
+  }, [workflowId]);
+
+  useEffect(() => {
+    localStorage.setItem("apiBase", apiBase);
+  }, [apiBase]);
+
+  useEffect(() => {
+    const editor = monaco.editor.create(editorContainerRef.current, {
+      value: localStorage.getItem("func") ?? FUNC_PLACEHOLDER,
+      language: "javascript",
+      theme: "vs-dark",
+      fontSize: 13,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+    });
+    editorRef.current = editor;
+
+    editor.onDidChangeModelContent(() => {
+      localStorage.setItem("func", editor.getValue());
+    });
+
+    return () => {
+      editor.dispose();
+    };
+  }, []);
+
+  const run = useCallback(async () => {
+    setIsError(false);
+    setIsLoading(true);
+    setResult("Running…");
+    try {
+      if (!token) throw new Error("Token is required");
+      if (!workflowId) throw new Error("Workflow ID is required");
+      if (!apiBase)
+        throw new Error("API base is required (paste a journal URL)");
+      const res = await fetch(`${apiBase}/workflow-logs/${workflowId}`, {
+        headers: { token },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      const data = await res.json();
+      const documents = data.logs
+        .filter((l) => l.type === "task")
+        .map((l) => l.details.document);
+      const events = data.logs
+        .filter((l) => l.type === "event")
+        .map((l) => l.details);
+      // eslint-disable-next-line no-eval
+      const func = eval(
+        editorRef.current.getValue() + "\n//# sourceURL=func.js",
+      );
+      setResult(JSON.stringify(func(documents, events), null, 2));
+    } catch (err) {
+      setIsError(true);
+      setResult(err.message || String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, workflowId, apiBase]);
+
+  useEffect(() => {
+    const onKeydown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") run();
+    };
+    document.addEventListener("keydown", onKeydown);
+    return () => document.removeEventListener("keydown", onKeydown);
+  }, [run]);
+
+  return (
+    <Flex direction="column" height="100vh" p="4" gap="3">
+      <Grid
+        columns={{ initial: "1", sm: "2fr 2fr auto" }}
+        gap="2"
+        flexShrink="0"
+      >
+        <Flex direction="column" gap="1">
+          <Text
+            as="label"
+            htmlFor="token-input"
+            size="1"
+            color="gray"
+            weight="medium"
+          >
+            Token
+          </Text>
+          <TextField.Root
+            id="token-input"
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="paste token here"
+            disabled={isLoading}
+            style={{ width: "100%" }}
+          />
+        </Flex>
+
+        <Flex direction="column" gap="1">
+          <Text
+            as="label"
+            htmlFor="workflow-id-input"
+            size="1"
+            color="gray"
+            weight="medium"
+          >
+            Workflow ID
+          </Text>
+          <TextField.Root
+            id="workflow-id-input"
+            type="text"
+            value={workflowId}
+            onChange={(e) => {
+              const value = e.target.value;
+              const parsed = parseJournalUrl(value);
+              if (parsed) {
+                setWorkflowId(parsed.id);
+                setApiBase(parsed.apiOrigin);
+              } else {
+                setWorkflowId(value);
+              }
+            }}
+            disabled={isLoading}
+            style={{ width: "100%" }}
+          />
+        </Flex>
+
+        <Flex direction="column" justify="end">
+          <Button onClick={run} disabled={isLoading} style={{ width: "100%" }}>
+            {isLoading && <Spinner />}
+            Run
+          </Button>
+        </Flex>
+      </Grid>
+
+      {apiBase && (
+        <Badge
+          color="blue"
+          variant="soft"
+          size="1"
+          style={{ alignSelf: "flex-start" }}
+        >
+          API: {apiBase}
+        </Badge>
+      )}
+
+      <Box
+        ref={editorContainerRef}
+        style={{
+          flex: "1 1 0",
+          minHeight: 0,
+          border: "1px solid var(--gray-6)",
+          borderRadius: "var(--radius-2)",
+          overflow: "hidden",
+        }}
+      />
+
+      <Flex direction="column" gap="1" flexShrink="0">
+        <Text size="1" color="gray" weight="medium">
+          Result
+        </Text>
+        {isError ? (
+          <Callout.Root color="red" size="1" aria-live="polite" role="status">
+            <Callout.Text>[Error] {result}</Callout.Text>
+          </Callout.Root>
+        ) : (
+          <ScrollArea
+            style={{
+              maxHeight: "180px",
+              background: "var(--color-panel-solid)",
+              border: "1px solid var(--gray-6)",
+              borderRadius: "var(--radius-2)",
+              padding: "8px 10px",
+            }}
+            aria-live="polite"
+            role="status"
+          >
+            <Code
+              style={{
+                fontFamily: '"Cascadia Code", "Fira Code", Consolas, monospace',
+                fontSize: "13px",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+                color: "var(--gray-12)",
+                background: "transparent",
+              }}
+            >
+              {result}
+            </Code>
+          </ScrollArea>
+        )}
+      </Flex>
+    </Flex>
+  );
+}
