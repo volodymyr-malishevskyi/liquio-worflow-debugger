@@ -39,6 +39,8 @@ export default function App() {
   const [result, setResult] = useState("—");
   const [isError, setIsError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [resultHeight, setResultHeight] = useState(180);
+  const dragState = useRef(null);
   const editorContainerRef = useRef(null);
   const editorRef = useRef(null);
 
@@ -74,6 +76,23 @@ export default function App() {
       editor.dispose();
     };
   }, []);
+
+  const handleDragStart = useCallback((e) => {
+    e.preventDefault();
+    dragState.current = { startY: e.clientY, startHeight: resultHeight };
+
+    const onMouseMove = (e) => {
+      const delta = dragState.current.startY - e.clientY;
+      const next = Math.max(60, Math.min(600, dragState.current.startHeight + delta));
+      setResultHeight(next);
+    };
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, [resultHeight]);
 
   const run = useCallback(async () => {
     setIsError(false);
@@ -192,51 +211,72 @@ export default function App() {
         </Badge>
       )}
 
-      <Box
-        ref={editorContainerRef}
-        style={{
-          flex: "1 1 0",
-          minHeight: 0,
-          border: "1px solid var(--gray-6)",
-          borderRadius: "var(--radius-2)",
-          overflow: "hidden",
-        }}
-      />
+      <Flex direction="column" style={{ flex: "1 1 0", minHeight: 0, gap: 0 }}>
+        <Box
+          ref={editorContainerRef}
+          style={{
+            flex: "1 1 0",
+            minHeight: "100px",
+            border: "1px solid var(--gray-6)",
+            borderRadius: "var(--radius-2)",
+            overflow: "hidden",
+          }}
+        />
 
-      <Flex direction="column" gap="1" flexShrink="0">
-        <Text size="1" color="gray" weight="medium">
-          Result
-        </Text>
-        {isError ? (
-          <Callout.Root color="red" size="1" aria-live="polite" role="status">
-            <Callout.Text>[Error] {result}</Callout.Text>
-          </Callout.Root>
-        ) : (
-          <ScrollArea
-            style={{
-              maxHeight: "180px",
-              background: "var(--color-panel-solid)",
-              border: "1px solid var(--gray-6)",
-              borderRadius: "var(--radius-2)",
-              padding: "8px 10px",
-            }}
-            aria-live="polite"
-            role="status"
-          >
-            <Code
+        <div
+          onMouseDown={handleDragStart}
+          style={{
+            height: "12px",
+            flexShrink: 0,
+            cursor: "ns-resize",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div style={{
+            width: "32px",
+            height: "3px",
+            borderRadius: "2px",
+            background: "var(--gray-5)",
+          }} />
+        </div>
+
+        <Flex direction="column" gap="1" style={{ height: resultHeight, flexShrink: 0 }}>
+          <Text size="1" color="gray" weight="medium">
+            Result
+          </Text>
+          {isError ? (
+            <Callout.Root color="red" size="1" aria-live="polite" role="status">
+              <Callout.Text>[Error] {result}</Callout.Text>
+            </Callout.Root>
+          ) : (
+            <ScrollArea
               style={{
-                fontFamily: '"Cascadia Code", "Fira Code", Consolas, monospace',
-                fontSize: "13px",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-all",
-                color: "var(--gray-12)",
-                background: "transparent",
+                flex: "1 1 0",
+                background: "var(--color-panel-solid)",
+                border: "1px solid var(--gray-6)",
+                borderRadius: "var(--radius-2)",
+                padding: "8px 10px",
               }}
+              aria-live="polite"
+              role="status"
             >
-              {result}
-            </Code>
-          </ScrollArea>
-        )}
+              <Code
+                style={{
+                  fontFamily: '"Cascadia Code", "Fira Code", Consolas, monospace',
+                  fontSize: "13px",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                  color: "var(--gray-12)",
+                  background: "transparent",
+                }}
+              >
+                {result}
+              </Code>
+            </ScrollArea>
+          )}
+        </Flex>
       </Flex>
     </Flex>
   );
