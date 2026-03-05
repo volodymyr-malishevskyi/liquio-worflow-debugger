@@ -1,5 +1,5 @@
 {
-  "name": "process-debugger",
+  "name": "liquio-workflow-debugger",
   "private": true,
   "type": "module",
   "scripts": {
