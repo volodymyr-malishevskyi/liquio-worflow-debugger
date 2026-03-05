@@ -3,10 +3,8 @@ import {
   Box,
   Button,
   Callout,
-  Code,
   Flex,
   Grid,
-  ScrollArea,
   Spinner,
   Text,
   TextField,
@@ -43,6 +41,8 @@ export default function App() {
   const dragState = useRef(null);
   const editorContainerRef = useRef(null);
   const editorRef = useRef(null);
+  const resultContainerRef = useRef(null);
+  const resultEditorRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem("token", token);
@@ -76,6 +76,35 @@ export default function App() {
       editor.dispose();
     };
   }, []);
+
+  useEffect(() => {
+    const editor = monaco.editor.create(resultContainerRef.current, {
+      value: "—",
+      language: "plaintext",
+      theme: "vs-dark",
+      readOnly: true,
+      fontSize: 13,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+      wordWrap: "on",
+      lineNumbers: "off",
+      renderLineHighlight: "none",
+      padding: { top: 8, bottom: 8 },
+      folding: true,
+    });
+    resultEditorRef.current = editor;
+    return () => editor.dispose();
+  }, []);
+
+  useEffect(() => {
+    const editor = resultEditorRef.current;
+    if (!editor || isError) return;
+    const model = editor.getModel();
+    const isPlaceholder = result === "—" || result === "Running…";
+    model.setValue(result);
+    monaco.editor.setModelLanguage(model, isPlaceholder ? "plaintext" : "json");
+  }, [result, isError]);
 
   const handleDragStart = useCallback((e) => {
     e.preventDefault();
@@ -246,35 +275,20 @@ export default function App() {
           <Text size="1" color="gray" weight="medium">
             Result
           </Text>
-          {isError ? (
+          <Box
+            ref={resultContainerRef}
+            style={{
+              flex: "1 1 0",
+              border: "1px solid var(--gray-6)",
+              borderRadius: "var(--radius-2)",
+              overflow: "hidden",
+              display: isError ? "none" : "block",
+            }}
+          />
+          {isError && (
             <Callout.Root color="red" size="1" aria-live="polite" role="status">
               <Callout.Text>[Error] {result}</Callout.Text>
             </Callout.Root>
-          ) : (
-            <ScrollArea
-              style={{
-                flex: "1 1 0",
-                background: "var(--color-panel-solid)",
-                border: "1px solid var(--gray-6)",
-                borderRadius: "var(--radius-2)",
-                padding: "8px 10px",
-              }}
-              aria-live="polite"
-              role="status"
-            >
-              <Code
-                style={{
-                  fontFamily: '"Cascadia Code", "Fira Code", Consolas, monospace',
-                  fontSize: "13px",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-all",
-                  color: "var(--gray-12)",
-                  background: "transparent",
-                }}
-              >
-                {result}
-              </Code>
-            </ScrollArea>
           )}
         </Flex>
       </Flex>
