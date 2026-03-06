@@ -101,6 +101,7 @@ export default function App() {
     const editor = resultEditorRef.current;
     if (!editor || isError) return;
     const model = editor.getModel();
+    if (!model || model.isDisposed()) return;
     const isPlaceholder = result === "—" || result === "Running…";
     model.setValue(result);
     monaco.editor.setModelLanguage(model, isPlaceholder ? "plaintext" : "json");
@@ -147,7 +148,8 @@ export default function App() {
       const func = eval(
         editorRef.current.getValue() + "\n//# sourceURL=func.js",
       );
-      setResult(JSON.stringify(func(documents, events), null, 2));
+      const json = JSON.stringify(func(documents, events), null, 2);
+      setResult(json !== undefined ? json : 'undefined');
     } catch (err) {
       setIsError(true);
       setResult(err.message || String(err));
