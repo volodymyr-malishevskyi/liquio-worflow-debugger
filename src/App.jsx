@@ -10,6 +10,7 @@ import {
   TextField,
 } from "@radix-ui/themes";
 import * as monaco from "monaco-editor";
+import momentLib from "moment";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const FUNC_PLACEHOLDER = `(documents, events) => {\n\treturn documents[0].documentTemplateId;\n};`;
@@ -144,6 +145,9 @@ export default function App() {
       const events = data.logs
         .filter((l) => l.type === "event")
         .map((l) => l.details);
+      // Exposed to the evaluated code via direct eval scope
+      // eslint-disable-next-line no-unused-vars
+      const moment = momentLib;
       // eslint-disable-next-line no-eval
       const func = eval(
         editorRef.current.getValue() + "\n//# sourceURL=func.js",
